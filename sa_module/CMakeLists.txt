@@ -2,17 +2,6 @@ cmake_minimum_required (VERSION 3.16)
 
 project("connd-sa")
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY D:/GTASAR3)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY D:/GTASAR3)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY D:/GTASAR3)
-
-#set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "D:/GTA San Andreas")
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "D:/GTA San Andreas")
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "D:/GTA San Andreas")
-#set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY D:/ARZLauncher/bin/arizona)
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY D:/ARZLauncher/bin/arizona)
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY D:/ARZLauncher/bin/arizona)
-
 find_package(magic_enum REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(plugin-sdk REQUIRED)
