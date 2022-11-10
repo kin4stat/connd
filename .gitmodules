@@ -1,0 +1,6 @@
+[submodule "third-party/kthook"]
+	path = third-party/kthook
+	url = https://github.com/kin4stat/kthook.git
+[submodule "third-party/sampapi"]
+	path = third-party/sampapi
+	url = https://github.com/kin4stat/SAMP-API.git
