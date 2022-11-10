@@ -5,6 +5,7 @@ project("connd-sa")
 find_package(magic_enum REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(plugin-sdk REQUIRED)
+find_package(spdlog REQUIRED)
 
 add_library("connd-sa" SHARED   "dllmain.cpp"
                                 "BitStream.cpp"
@@ -23,7 +24,8 @@ target_link_libraries("connd-sa" PRIVATE    kthook
                                             nlohmann_json::nlohmann_json
                                             pluginsdk::gtasa 
                                             connd-ipclib
-                                            RakNet)
+                                            RakNet
+                                            spdlog::spdlog)
 
 set_target_properties("connd-sa" PROPERTIES
   SUFFIX "-by-kin4stat.asi"

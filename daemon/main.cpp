@@ -14,10 +14,14 @@
 
 #include "RakNet/RakNetworkFactory.h"
 
+#include "logger.hpp"
+
 RakPlugin* plugin;
 std::atomic<bool> stop = false;
 
 void recv_startup_parameters(unsigned short port) {
+  LOG_INFO("Receiving data from {}:{}", "127.0.0.1", port);
+
   ipc_client client;
 
   client.init();
@@ -26,6 +30,8 @@ void recv_startup_parameters(unsigned short port) {
   auto [data, name] = client.recv_string();
   if (name == "parameters") {
     rak_state = nlohmann::json::parse(data).get<raknet_state>();
+
+    LOG_INFO("Startup data received");
   }
 }
 
@@ -37,11 +43,17 @@ void daemon() {
   output << server.get_bound_port() << std::endl;
   output.close();
 
+  LOG_INFO("Started daemon server on {}:{}", "127.0.0.1", server.get_bound_port());
+
   server.accept();
 
   stop = true;
 
+  LOG_INFO("Stopping mainloop");
+
   g_rak_client->Disconnect(0, 0);
+
+  LOG_INFO("RakNet Disconnected");
 
   auto& rel_level = get_pure_rak_client()->remoteSystemList->reliabilityLayer;
 
@@ -57,21 +69,31 @@ void daemon() {
   rak_state.received_packets_base_index = rel_level.receivedPacketsBaseIndex;
   rak_state.send_number = rel_level.messageNumber;
 
+  LOG_INFO("Saved reliability level");
+
   const nlohmann::json startup_args = rak_state;
 
   server.send_string("parameters", startup_args.dump());
 
+  LOG_INFO("Sent network state");
+
   plugin->send_rpcs(&server);
+
+  LOG_INFO("Sent rpcs, count: {}", plugin->get_rpc_count());
 
   server.disconnect();
 }
 
 int main(int argc, char* argv[]) {
+  logger::instance();
+
   char temp[1024];
 
   GetModuleFileNameA(GetModuleHandleA(nullptr), temp, sizeof(temp));
 
   if (std::string_view{ temp }.find("connd-daemon-by-kin4stat.exe") == std::string_view::npos) {
+    LOG_INFO("Daemon executable name changed, shutting down");
+
     return 1;
   }
 
@@ -115,7 +137,11 @@ int main(int argc, char* argv[]) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 
+  LOG_INFO("Mainloop stopped, waiting for daemon thread");
+
   d_thread.join();
+
+  LOG_INFO("Shutting down");
 
   return 0;
 }

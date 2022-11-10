@@ -4,6 +4,7 @@ project("connd-daemon")
 
 find_package(magic_enum REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(spdlog REQUIRED)
 
 add_executable("connd-daemon" "main.cpp")
 
@@ -17,7 +18,8 @@ set_target_properties("connd-daemon"
 target_link_libraries("connd-daemon" PRIVATE    magic_enum::magic_enum
                                                 nlohmann_json::nlohmann_json
                                                 RakNet
-                                                connd-ipclib)
+                                                connd-ipclib 
+                                                spdlog::spdlog)
 set_target_properties("connd-daemon" PROPERTIES
   SUFFIX "-by-kin4stat.exe"
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:DebugDLL>"

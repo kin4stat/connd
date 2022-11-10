@@ -2,6 +2,7 @@
 #define MAGIC_ENUM_RANGE_MAX 256
 
 #include <WinSock2.h>
+#include "logger.hpp"
 #include "BitStream.hpp"
 #include "kthook/kthook.hpp"
 #include "sampapi/sampapi.h"
@@ -10,7 +11,6 @@
 #include <format>
 #include <chrono>
 #include <fstream>
-#include <iostream>
 #include <filesystem>
 #include <chrono>
 
@@ -48,8 +48,6 @@
 
 #include "ipc/ipc_server.hpp"
 #include "sampapi/CNetGame.h"
-
-#define LOG(X, ...) (std::cout << std::format("[{:%T}] " X, std::chrono::system_clock::now(), __VA_ARGS__) << std::endl)
 
 enum class EmulState {
   kNone,
@@ -122,7 +120,7 @@ void start_subprocess() {
   const nlohmann::json startup_args = rak_state;
 
   auto daemon_path = std::filesystem::current_path() / R"(connd\connd-daemon-by-kin4stat.exe)";
-  
+
 
   STARTUPINFO si{};
   PROCESS_INFORMATION pi{};
@@ -130,9 +128,11 @@ void start_subprocess() {
 
   ipc_server server;
   if (!server.init("127.0.0.1", 0)) {
-    std::cout << "server create error" << std::endl;
+    LOG_ERROR("Server creation error");
     return;
   }
+
+  LOG_INFO("Created server on {}:{}", "127.0.0.1", server.get_bound_port());
 
   auto run_cmd = std::format("{} {}", daemon_path.string(), server.get_bound_port());
 
@@ -151,6 +151,8 @@ void start_subprocess() {
   server.send_string("parameters", startup_args.dump());
 
   server.disconnect();
+
+  LOG_INFO("Sent data to daemon");
 }
 
 void load_samp_state() {
@@ -182,10 +184,12 @@ void read_settings() {
 
     output << nlohmann::json{g_settings}.dump();
   }
+
+  LOG_INFO("Settings: default_timeout = {}m; quit_timeout = {}m", g_settings.default_timeout, g_settings.quit_timeout);
 }
 
 void get_subprocess_port() {
-  std::ifstream input{ R"(.\connd\connd_port.json)" };
+  std::ifstream input{R"(.\connd\connd_port.json)"};
   input >> g_settings.port;
 }
 
@@ -193,12 +197,20 @@ bool receive_startup_data() {
   get_subprocess_port();
 
   client.init();
-  if (!client.connect("127.0.0.1", g_settings.port))
+
+  LOG_INFO("Daemon opened on port {}, trying to connect", g_settings.port);
+
+  if (!client.connect("127.0.0.1", g_settings.port)) {
+    LOG_ERROR("Couldn't connect to deamon");
+
     return false;
+  }
 
   auto [data, name] = client.recv_string();
   if (name == "parameters") {
     rak_state = nlohmann::json::parse(data).get<raknet_state>();
+
+    LOG_INFO("Received startup parameters");
   }
 
   return true;
@@ -216,12 +228,16 @@ void alloc_console() {
 }
 
 UTILS_BEGIN_FUNCTION(safe_disconnect, void)
+  LOG_INFO("Safe disconnect");
+
   utils::SetRaw(sampapi::GetAddress(Addresses<decltype(version)>::reset_nop), "\xC2\x04\x00", 3);
   utils::SetRaw(sampapi::GetAddress(Addresses<decltype(version)>::notification_nop), "\xC2\x10\x00", 3);
   utils::MemoryFill(sampapi::GetAddress(Addresses<decltype(version)>::clear_remote_system_nop), 0x90, 0x30);
   rak_state.pindex = RefNetGame(version)->GetRakClient()->GetPlayerIndex();
 
   RefNetGame(version)->GetRakClient()->Disconnect(0, 0);
+
+  LOG_INFO("RakNet disconnected");
 UTILS_END_FUNCTION(safe_disconnect, void)
 
 void save_samp_state() {
@@ -258,52 +274,57 @@ void save_samp_state() {
   std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketReadIndex,
                     std::begin(rak_state.waitingForSequencedPacketReadIndex));
 
+  LOG_INFO("Saved network state");
+
   samp_state.clear();
+
   auto store = [](auto version_tag) {
     samp_state.emplace("startup_args", get_startup_args(version_tag));
 
+    LOG_INFO("Saved startup_args");
+
     camera_state::instance()->store(version_tag, samp_state);
-    std::cout << "camera_state" << std::endl;
+    LOG_INFO("Saved camera_state");
     remove_building_state::instance()->store(version_tag, samp_state);
-    std::cout << "remove_building_state" << std::endl;
+    LOG_INFO("Saved remove_building_state");
     remote_players_state::instance()->store(version_tag, samp_state);
-    std::cout << "remote_players_state" << std::endl;
+    LOG_INFO("Saved remote_players_state");
     netgame_state::instance()->store(version_tag, samp_state);
-    std::cout << "netgame_state" << std::endl;
+    LOG_INFO("Saved netgame_state");
     labels_state::instance()->store(version_tag, samp_state);
-    std::cout << "labels_state" << std::endl;
+    LOG_INFO("Saved labels_state");
     local_player_state::instance()->store(version_tag, samp_state);
-    std::cout << "local_player_state" << std::endl;
+    LOG_INFO("Saved local_player_state");
     gangzone_state::instance()->store(version_tag, samp_state);
-    std::cout << "gangzone_state" << std::endl;
+    LOG_INFO("Saved gangzone_state");
     chat_state::instance()->store(version_tag, samp_state);
-    std::cout << "chat_state" << std::endl;
+    LOG_INFO("Saved chat_state");
     dialog_state::instance()->store(version_tag, samp_state);
-    std::cout << "dialog_state" << std::endl;
+    LOG_INFO("Saved dialog_state");
     actors_state::instance()->store(version_tag, samp_state);
-    std::cout << "actors_state" << std::endl;
+    LOG_INFO("Saved actors_state");
     net_stats_state::instance()->store(version_tag, samp_state);
-    std::cout << "net_stats_state" << std::endl;
+    LOG_INFO("Saved net_stats_state");
     kill_list_state::instance()->store(version_tag, samp_state);
-    std::cout << "kill_list_state" << std::endl;
+    LOG_INFO("Saved kill_list_state");
     textdraw_state::instance()->store(version_tag, samp_state);
-    std::cout << "textdraw_state" << std::endl;
+    LOG_INFO("Saved textdraw_state");
     vehicles_state::instance()->store(version_tag, samp_state);
-    std::cout << "vehicles_state" << std::endl;
+    LOG_INFO("Saved vehicles_state");
     objects_state::instance()->store(version_tag, samp_state);
-    std::cout << "objects_state" << std::endl;
+    LOG_INFO("Saved objects_state");
     pickups_state::instance()->store(version_tag, samp_state);
-    std::cout << "pickups_state" << std::endl;
+    LOG_INFO("Saved pickups_state");
     checkpoint_state::instance()->store(version_tag, samp_state);
-    std::cout << "checkpoint_state" << std::endl;
+    LOG_INFO("Saved checkpoint_state");
     object_edit_state::instance()->store(version_tag, samp_state);
-    std::cout << "object_edit_state" << std::endl;
+    LOG_INFO("Saved object_edit_state");
     object_selection_state::instance()->store(version_tag, samp_state);
-    std::cout << "object_selection_state" << std::endl;
+    LOG_INFO("Saved object_selection_state");
     markers_state::instance()->store(version_tag, samp_state);
-    std::cout << "markers_state" << std::endl;
+    LOG_INFO("Saved markers_state");
     menus_state::instance()->store(version_tag, samp_state);
-    std::cout << "menus_state" << std::endl;
+    LOG_INFO("Saved menus_state");
   };
 
   if (utils::get_samp_version() == utils::samp_version::kR1) {
@@ -319,39 +340,66 @@ void save_samp_state() {
   output << samp_state.dump(2);
 
   output.close();
+  LOG_INFO("Starting subprocess...");
+
   start_subprocess();
+
+  LOG_INFO("Saved state");
 }
 
 void restore_samp_state() {
   auto restore = [](auto version_tag) {
     remove_building_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored remove_building_state");
     netgame_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored netgame_state");
     local_player_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored local_player_state");
     remote_players_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored remote_players_state");
     actors_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored actors_state");
 
     vehicles_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored vehicles_state");
 
     labels_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored labels_state");
     chat_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored chat_state");
     kill_list_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored kill_list_state");
     gangzone_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored gangzone_state");
     net_stats_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored net_stats_state");
     pickups_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored pickups_state");
 
     textdraw_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored textdraw_state");
     dialog_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored dialog_state");
     objects_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored objects_state");
     checkpoint_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored checkpoint_state");
     markers_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored markers_state");
     menus_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored menus_state");
 
     object_selection_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored object_selection_state");
     object_edit_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored object_edit_state");
     remote_players_state::instance()->restore_phase2(version_tag, samp_state);
+    LOG_INFO("Restored remote_players_state(phase 2)");
 
     camera_state::instance()->restore(version_tag, samp_state);
+    LOG_INFO("Restored camera_state");
     local_player_state::instance()->restore_phase2(version_tag, samp_state);
+    LOG_INFO("Restored local_player_state(phase 2)");
   };
 
   if (utils::get_samp_version() == utils::samp_version::kR1) {
@@ -364,8 +412,11 @@ void restore_samp_state() {
 
     restore(ver_tag);
   }
+
+  LOG_INFO("Gettings rpcs...");
   client.send_string("get_rpcs", "get_rpcs");
 
+  auto i = 0u;
   while (true) {
     auto [stop_receiving, event_name] = client.recv_raw_data<int>();
     if (stop_receiving) break;
@@ -382,8 +433,12 @@ void restore_samp_state() {
                                str.data() + 1, str.size() - 2
                              });
       }
+
+      ++i;
     }
   }
+
+  LOG_INFO("Restored rpcs(total count {})", i);
 
   current_state = EmulState::kNone;
 
@@ -401,23 +456,25 @@ void restore_samp_state() {
                     std::begin(rss->reliabilityLayer.waitingForOrderedPacketReadIndex));
   std::ranges::copy(rak_state.waitingForSequencedPacketReadIndex,
                     std::begin(rss->reliabilityLayer.waitingForSequencedPacketReadIndex));
+
+  LOG_INFO("Restored reliability level");
 }
 
 void process_update() {
   if (current_state == EmulState::kCanEmulCookie) {
     samp_utils::emulate_socket_packet(rak_state.cookie_dump);
     current_state = EmulState::kWaitingForSecondRequest;
-    LOG("Pass EmulState::kCanEmulCookie");
+    LOG_INFO("Pass EmulState::kCanEmulCookie");
   }
   else if (current_state == EmulState::kCanEmulReply) {
     current_state = EmulState::kWaitingForThirdRequest;
     samp_utils::emulate_socket_packet(rak_state.reply_dump);
-    LOG("Pass EmulState::kCanEmulReply");
+    LOG_INFO("Pass EmulState::kCanEmulReply");
   }
   else if (current_state == EmulState::kCanEmulAuthKey) {
     samp_utils::emulate_packet(rak_state.auth_key_dump);
     current_state = EmulState::kWaitingForAuthKey;
-    LOG("Pass EmulState::kCanEmulAuthKey");
+    LOG_INFO("Pass EmulState::kCanEmulAuthKey");
   }
   else if (current_state == EmulState::kCanEmulConnectionAccept) {
     auto rakpeer = samp_utils::get_rakpeer();
@@ -440,7 +497,7 @@ void process_update() {
 
     current_state = EmulState::kWaitingForClientJoin;
 
-    LOG("Pass EmulState::kCanEmulConnectionAccept");
+    LOG_INFO("Pass EmulState::kCanEmulConnectionAccept");
   }
   else if (current_state == EmulState::kCanEmulStaticData) {
     auto rakpeer = samp_utils::get_rakpeer();
@@ -451,20 +508,21 @@ void process_update() {
 
     samp_utils::emulate_packet(rak_state.static_data_dump);
 
-    LOG("Pass EmulState::kCanEmulStaticData");
+    LOG_INFO("Pass EmulState::kCanEmulStaticData");
   }
   if (current_state == EmulState::kCanEmulStaticData) {
+    LOG_INFO("Restoring samp state");
     restore_samp_state();
+    LOG_INFO("State restored, good luck");
   }
 }
 
 LONG WINAPI ExceptionFilter(EXCEPTION_POINTERS* ExceptionInfo) {
   __try {
     save_samp_state();
-    std::cout << "save" << std::endl;
   }
   __except (EXCEPTION_EXECUTE_HANDLER) {
-    std::cout << "exc while saving" << std::endl;
+    LOG_INFO("Exception while saving");
     std::quick_exit(0);
   }
 
@@ -500,6 +558,8 @@ struct connd {
 
   connd() {
     auto init = [this]<typename VerTag>(VerTag version_tag) {
+      logger::instance();
+
       read_settings();
 
       rak_state.timeout = g_settings.default_timeout * 60;
@@ -571,6 +631,8 @@ struct connd {
 
       g_rakclient = rakclient;
       g_rakpeer = reinterpret_cast<RakPeer*>(static_cast<char*>(rakclient) - 0xDDE);
+
+      LOG_INFO("Got RakClient address: 0x{:08X}", reinterpret_cast<std::uintptr_t>(g_rakclient));
 
       return rakclient;
     });
@@ -736,6 +798,8 @@ struct connd {
       if (set_filter_once) {
         SetUnhandledExceptionFilter(&ExceptionFilter);
         set_filter_once = false;
+
+        LOG_INFO("SetUnhandledExceptionFilter");
       }
       if (current_state.load() == EmulState::kNone) {
         rak_state.hostname = hostname;
@@ -745,6 +809,10 @@ struct connd {
       else {
         set_port = true;
         port = htons(rak_state.local_port);
+
+        LOG_INFO("Restoring connection to {}:{} on port {}(BE: {})", rak_state.hostname, rak_state.server_pid.port,
+                 rak_state.local_port, port);
+
         return hook.get_trampoline()(rakpeer,
                                      rak_state.hostname.c_str(),
                                      rak_state.server_pid.port,
@@ -762,6 +830,8 @@ struct connd {
 
     update_hook.set_cb([](const auto& hook) {
       if (GetKeyState(VK_F5) & 0x8000 && GetKeyState(VK_CONTROL) & 0x8000) {
+        LOG_INFO("Emulating crash");
+
         save_samp_state();
         std::quick_exit(0);
       }
@@ -770,6 +840,8 @@ struct connd {
         process_update();
       }
       __except (EXCEPTION_EXECUTE_HANDLER) {
+        LOG_INFO("Exception while restoring state, falling back");
+
         current_state = EmulState::kNone;
 
         auto reset_state = [](auto version_tag) {
@@ -817,6 +889,8 @@ struct connd {
 
     netgame_dctor_hook.set_cb([](const auto& hook, void* netgame) {
       if (g_settings.quit_timeout) {
+        LOG_INFO("Quiting from /q; daemon timeout: {}", rak_state.timeout);
+
         save_samp_state();
       }
       return hook.get_trampoline()(netgame);
@@ -859,10 +933,13 @@ BOOL WINAPI DllMain(HMODULE hinstDLL,
     GetModuleFileNameA(hinstDLL, temp, sizeof(temp));
 
     if (std::string_view{temp}.find("connd-sa-by-kin4stat") == std::string_view::npos) {
+      LOG_INFO("Plugin name changed, aborting");
       return FALSE;
     }
     if (GetModuleHandleA("connd-sa-by-kin4stat.asi") != hinstDLL &&
       GetModuleHandleA("connd-sa-by-kin4stat.dll") != hinstDLL) {
+
+      LOG_INFO("Plugin name changed, aborting");
       return FALSE;
     }
 

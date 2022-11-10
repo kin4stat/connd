@@ -1,5 +1,6 @@
 #pragma once
 
+#include "logger.hpp"
 #include "raknet_state.hpp"
 #include "raknet_utils.hpp"
 #include "RakNet/InternalPacket.h"
@@ -41,10 +42,14 @@ public:
     if (*data == ID_OPEN_CONNECTION_REQUEST) {
       if (current_state == EmulState::kWaitingForFirstRequest) {
         current_state = EmulState::kWaitingForSecondRequest;
+        LOG_INFO("Pass EmulState::kWaitingForFirstRequest");
+
         emulate_socket_recv(rak_state.cookie_dump);
       }
       else if (current_state == EmulState::kWaitingForSecondRequest) {
         current_state = EmulState::kWaitingForThirdRequest;
+
+        LOG_INFO("Pass EmulState::kWaitingForSecondRequest");
         emulate_socket_recv(rak_state.reply_dump);
       }
     }
@@ -52,7 +57,11 @@ public:
 
   bool OnSendImmediate(const char* data, const unsigned bitsUsed) override {
     if (*data == ID_CONNECTION_REQUEST && current_state == EmulState::kWaitingForThirdRequest) {
+      LOG_INFO("Pass EmulState::kWaitingForThirdRequest");
+
       emulate_packet_recv(rak_state.auth_key_dump);
+
+      LOG_INFO("Emulating Authkey");
 
       auto rak = get_pure_rak_client();
       auto rss = rak->remoteSystemList;
@@ -74,11 +83,16 @@ public:
 
       emulate_packet_recv(rak_state.conn_accept_dump);
 
+      LOG_INFO("Emulating Connection accept");
+
       rss->staticData.Reset();
       rss->staticData.Write(rak_state.static_data_dump.data() + 1,
                             rak_state.static_data_dump.size() - 1);
 
       emulate_packet_recv(rak_state.static_data_dump);
+
+      LOG_INFO("Emulating static data");
+
       current_state = EmulState::kNone;
 
       auto& rel_level = get_pure_rak_client()->remoteSystemList->reliabilityLayer;
@@ -95,7 +109,9 @@ public:
       rel_level.receivedPacketsBaseIndex = rak_state.received_packets_base_index;
       rel_level.messageNumber = rak_state.send_number;
 
-      printf("connected\n");
+      LOG_INFO("Restored reliability level");
+
+      LOG_INFO("Connected");
 
       return false;
     }
@@ -130,6 +146,10 @@ public:
       server->send_string("raw_rpc", std::string_view{rpc.data(), rpc.size()});
     }
     server->send_raw_data("stop_receiving", 1);
+  }
+
+  std::size_t get_rpc_count() const {
+    return rpc_queue.size();
   }
 
 private:
