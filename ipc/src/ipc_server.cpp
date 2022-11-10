@@ -1,5 +1,7 @@
 #include "ipc/ipc_server.hpp"
 
+#include <iostream>
+
 #include "ipc/ipc_headers.hpp"
 
 ipc_server::~ipc_server() {
@@ -8,7 +10,7 @@ ipc_server::~ipc_server() {
 }
 
 bool ipc_server::init(std::string_view address, unsigned short port) {
-  if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
     return false;
   }
 
@@ -90,4 +92,13 @@ string_recv ipc_server::recv_string() {
   }
 
   return result;
+}
+
+unsigned short ipc_server::get_bound_port() {
+  sockaddr_in s_in;
+  int s_in_size = sizeof(s_in);
+
+  getsockname(s, reinterpret_cast<struct sockaddr*>(&s_in), &s_in_size); // read binding
+
+  return ntohs(s_in.sin_port); // get the port number
 }

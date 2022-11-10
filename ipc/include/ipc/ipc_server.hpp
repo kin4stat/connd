@@ -24,6 +24,8 @@ public:
 
   string_recv recv_string();
 
+  unsigned short get_bound_port();
+
 private:
   sockaddr_in server{}, client{};
   WSADATA wsa{};

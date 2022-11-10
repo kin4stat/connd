@@ -2,6 +2,7 @@
 #include <ctime>
 #include <thread>
 #include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include "raknet_plugin.hpp"
 #include "rakclient.hpp"
@@ -15,13 +16,12 @@
 
 RakPlugin* plugin;
 std::atomic<bool> stop = false;
-std::condition_variable can_disconnect;
 
-void recv_startup_parameters() {
+void recv_startup_parameters(unsigned short port) {
   ipc_client client;
 
   client.init();
-  client.connect("127.0.0.1", 62234);
+  client.connect("127.0.0.1", port);
 
   auto [data, name] = client.recv_string();
   if (name == "parameters") {
@@ -31,15 +31,17 @@ void recv_startup_parameters() {
 
 void daemon() {
   ipc_server server;
-  server.init("127.0.0.1", 62236);
+  server.init("127.0.0.1", 0);
+
+  std::ofstream output{ R"(.\connd\connd_port.json)" };
+  output << server.get_bound_port() << std::endl;
+  output.close();
 
   server.accept();
 
   stop = true;
 
-  std::mutex mtx;
-  std::unique_lock lock(mtx);
-  can_disconnect.wait(lock);
+  g_rak_client->Disconnect(0, 0);
 
   auto& rel_level = get_pure_rak_client()->remoteSystemList->reliabilityLayer;
 
@@ -65,6 +67,8 @@ void daemon() {
 }
 
 int main(int argc, char* argv[]) {
+  Sleep(5000);
+
   char temp[1024];
 
   GetModuleFileNameA(GetModuleHandleA(nullptr), temp, sizeof(temp));
@@ -77,7 +81,9 @@ int main(int argc, char* argv[]) {
 
   alloc_console();
 
-  recv_startup_parameters();
+  const auto port = std::stoul(argv[1]);
+
+  recv_startup_parameters(port);
 
   plugin = new RakPlugin{};
 
@@ -111,9 +117,6 @@ int main(int argc, char* argv[]) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 
-  g_rak_client->Disconnect(0, 0);
-
-  can_disconnect.notify_all();
   d_thread.join();
 
   return 0;

@@ -68,6 +68,7 @@ enum class EmulState {
 struct settings {
   std::uint32_t default_timeout;
   std::uint32_t quit_timeout;
+  std::uint16_t port;
 } g_settings;
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(settings, default_timeout, quit_timeout)
@@ -121,14 +122,19 @@ void start_subprocess() {
   const nlohmann::json startup_args = rak_state;
 
   auto daemon_path = std::filesystem::current_path() / R"(connd\connd-daemon-by-kin4stat.exe)";
-  auto run_cmd = daemon_path.string();
+  
 
   STARTUPINFO si{};
   PROCESS_INFORMATION pi{};
   si.cb = sizeof(si);
 
   ipc_server server;
-  server.init("127.0.0.1", 62234);
+  if (!server.init("127.0.0.1", 0)) {
+    std::cout << "server create error" << std::endl;
+    return;
+  }
+
+  auto run_cmd = std::format("{} {}", daemon_path.string(), server.get_bound_port());
 
   CreateProcessA(NULL,
                  run_cmd.data(),
@@ -172,15 +178,22 @@ void read_settings() {
 
     input.close();
 
-    std::ofstream output{ R"(.\connd\connd-settings.json)" };
+    std::ofstream output{R"(.\connd\connd-settings.json)"};
 
-    output << nlohmann::json{ g_settings }.dump();
+    output << nlohmann::json{g_settings}.dump();
   }
 }
 
+void get_subprocess_port() {
+  std::ifstream input{ R"(.\connd\connd_port.json)" };
+  input >> g_settings.port;
+}
+
 bool receive_startup_data() {
+  get_subprocess_port();
+
   client.init();
-  if (!client.connect("127.0.0.1", 62236))
+  if (!client.connect("127.0.0.1", g_settings.port))
     return false;
 
   auto [data, name] = client.recv_string();
@@ -212,89 +225,100 @@ UTILS_BEGIN_FUNCTION(safe_disconnect, void)
 UTILS_END_FUNCTION(safe_disconnect, void)
 
 void save_samp_state() {
-  if (!std::filesystem::exists(R"(.\connd\connd_samp_dump.json)")) {
-    safe_disconnect();
+  if (std::filesystem::exists(R"(.\connd\connd_samp_dump.json)")) {
+    std::ifstream input{R"(.\connd\connd_samp_dump.json)"};
 
-    auto rakpeer = samp_utils::get_rakpeer();
-    auto rss = rakpeer->remote_system_list;
+    nlohmann::json j;
+    input >> j;
 
-    rak_state.server_pid = rss->playerId;
-    rak_state.local_port = rakpeer->myPlayerId.port;
+    samp_state["startup_args"] = j["startup_args"];
 
-    rak_state.received_packets_base_index = rss->reliabilityLayer.receivedPacketsBaseIndex;
-    rak_state.send_number = rss->reliabilityLayer.message_number;
-
-    std::ranges::copy(rss->reliabilityLayer.waitingForOrderedPacketWriteIndex,
-                      std::begin(rak_state.waitingForOrderedPacketWriteIndex));
-    std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketWriteIndex,
-                      std::begin(rak_state.waitingForSequencedPacketWriteIndex));
-    std::ranges::copy(rss->reliabilityLayer.waitingForOrderedPacketReadIndex,
-                      std::begin(rak_state.waitingForOrderedPacketReadIndex));
-    std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketReadIndex,
-                      std::begin(rak_state.waitingForSequencedPacketReadIndex));
-
-    auto store = [](auto version_tag) {
-      samp_state.emplace("startup_args", get_startup_args(version_tag));
-
-      camera_state::instance()->store(version_tag, samp_state);
-      std::cout << "camera_state" << std::endl;
-      remove_building_state::instance()->store(version_tag, samp_state);
-      std::cout << "remove_building_state" << std::endl;
-      remote_players_state::instance()->store(version_tag, samp_state);
-      std::cout << "remote_players_state" << std::endl;
-      netgame_state::instance()->store(version_tag, samp_state);
-      std::cout << "netgame_state" << std::endl;
-      labels_state::instance()->store(version_tag, samp_state);
-      std::cout << "labels_state" << std::endl;
-      local_player_state::instance()->store(version_tag, samp_state);
-      std::cout << "local_player_state" << std::endl;
-      gangzone_state::instance()->store(version_tag, samp_state);
-      std::cout << "gangzone_state" << std::endl;
-      chat_state::instance()->store(version_tag, samp_state);
-      std::cout << "chat_state" << std::endl;
-      dialog_state::instance()->store(version_tag, samp_state);
-      std::cout << "dialog_state" << std::endl;
-      actors_state::instance()->store(version_tag, samp_state);
-      std::cout << "actors_state" << std::endl;
-      net_stats_state::instance()->store(version_tag, samp_state);
-      std::cout << "net_stats_state" << std::endl;
-      kill_list_state::instance()->store(version_tag, samp_state);
-      std::cout << "kill_list_state" << std::endl;
-      textdraw_state::instance()->store(version_tag, samp_state);
-      std::cout << "textdraw_state" << std::endl;
-      vehicles_state::instance()->store(version_tag, samp_state);
-      std::cout << "vehicles_state" << std::endl;
-      objects_state::instance()->store(version_tag, samp_state);
-      std::cout << "objects_state" << std::endl;
-      pickups_state::instance()->store(version_tag, samp_state);
-      std::cout << "pickups_state" << std::endl;
-      checkpoint_state::instance()->store(version_tag, samp_state);
-      std::cout << "checkpoint_state" << std::endl;
-      object_edit_state::instance()->store(version_tag, samp_state);
-      std::cout << "object_edit_state" << std::endl;
-      object_selection_state::instance()->store(version_tag, samp_state);
-      std::cout << "object_selection_state" << std::endl;
-      markers_state::instance()->store(version_tag, samp_state);
-      std::cout << "markers_state" << std::endl;
-      menus_state::instance()->store(version_tag, samp_state);
-      std::cout << "menus_state" << std::endl;
-    };
-
-    if (utils::get_samp_version() == utils::samp_version::kR1) {
-      auto ver_tag = sampapi::v037r1::VersionTag{};
-      store(ver_tag);
+    if (!can_restore()) {
+      return;
     }
-    else if (utils::get_samp_version() == utils::samp_version::kR3) {
-      auto ver_tag = sampapi::v037r3::VersionTag{};
-      store(ver_tag);
-    }
-
-    std::ofstream output{R"(.\connd\connd_samp_dump.json)"};
-    output << samp_state.dump(2);
-
-    output.close();
-    start_subprocess();
   }
+
+  safe_disconnect();
+
+  auto rakpeer = samp_utils::get_rakpeer();
+  auto rss = rakpeer->remote_system_list;
+
+  rak_state.server_pid = rss->playerId;
+  rak_state.local_port = rakpeer->myPlayerId.port;
+
+  rak_state.received_packets_base_index = rss->reliabilityLayer.receivedPacketsBaseIndex;
+  rak_state.send_number = rss->reliabilityLayer.message_number;
+
+  std::ranges::copy(rss->reliabilityLayer.waitingForOrderedPacketWriteIndex,
+                    std::begin(rak_state.waitingForOrderedPacketWriteIndex));
+  std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketWriteIndex,
+                    std::begin(rak_state.waitingForSequencedPacketWriteIndex));
+  std::ranges::copy(rss->reliabilityLayer.waitingForOrderedPacketReadIndex,
+                    std::begin(rak_state.waitingForOrderedPacketReadIndex));
+  std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketReadIndex,
+                    std::begin(rak_state.waitingForSequencedPacketReadIndex));
+
+  auto store = [](auto version_tag) {
+    samp_state.emplace("startup_args", get_startup_args(version_tag));
+
+    camera_state::instance()->store(version_tag, samp_state);
+    std::cout << "camera_state" << std::endl;
+    remove_building_state::instance()->store(version_tag, samp_state);
+    std::cout << "remove_building_state" << std::endl;
+    remote_players_state::instance()->store(version_tag, samp_state);
+    std::cout << "remote_players_state" << std::endl;
+    netgame_state::instance()->store(version_tag, samp_state);
+    std::cout << "netgame_state" << std::endl;
+    labels_state::instance()->store(version_tag, samp_state);
+    std::cout << "labels_state" << std::endl;
+    local_player_state::instance()->store(version_tag, samp_state);
+    std::cout << "local_player_state" << std::endl;
+    gangzone_state::instance()->store(version_tag, samp_state);
+    std::cout << "gangzone_state" << std::endl;
+    chat_state::instance()->store(version_tag, samp_state);
+    std::cout << "chat_state" << std::endl;
+    dialog_state::instance()->store(version_tag, samp_state);
+    std::cout << "dialog_state" << std::endl;
+    actors_state::instance()->store(version_tag, samp_state);
+    std::cout << "actors_state" << std::endl;
+    net_stats_state::instance()->store(version_tag, samp_state);
+    std::cout << "net_stats_state" << std::endl;
+    kill_list_state::instance()->store(version_tag, samp_state);
+    std::cout << "kill_list_state" << std::endl;
+    textdraw_state::instance()->store(version_tag, samp_state);
+    std::cout << "textdraw_state" << std::endl;
+    vehicles_state::instance()->store(version_tag, samp_state);
+    std::cout << "vehicles_state" << std::endl;
+    objects_state::instance()->store(version_tag, samp_state);
+    std::cout << "objects_state" << std::endl;
+    pickups_state::instance()->store(version_tag, samp_state);
+    std::cout << "pickups_state" << std::endl;
+    checkpoint_state::instance()->store(version_tag, samp_state);
+    std::cout << "checkpoint_state" << std::endl;
+    object_edit_state::instance()->store(version_tag, samp_state);
+    std::cout << "object_edit_state" << std::endl;
+    object_selection_state::instance()->store(version_tag, samp_state);
+    std::cout << "object_selection_state" << std::endl;
+    markers_state::instance()->store(version_tag, samp_state);
+    std::cout << "markers_state" << std::endl;
+    menus_state::instance()->store(version_tag, samp_state);
+    std::cout << "menus_state" << std::endl;
+  };
+
+  if (utils::get_samp_version() == utils::samp_version::kR1) {
+    auto ver_tag = sampapi::v037r1::VersionTag{};
+    store(ver_tag);
+  }
+  else if (utils::get_samp_version() == utils::samp_version::kR3) {
+    auto ver_tag = sampapi::v037r3::VersionTag{};
+    store(ver_tag);
+  }
+
+  std::ofstream output{R"(.\connd\connd_samp_dump.json)"};
+  output << samp_state.dump(2);
+
+  output.close();
+  start_subprocess();
 }
 
 void restore_samp_state() {
@@ -776,10 +800,12 @@ struct connd {
           result = std::clamp(result, 0, 10);
 
           rak_state.timeout = result * 60;
-        } else {
+        }
+        else {
           rak_state.timeout = g_settings.quit_timeout * 60;
         }
-      } else {
+      }
+      else {
         rak_state.timeout = g_settings.quit_timeout * 60;
       }
 

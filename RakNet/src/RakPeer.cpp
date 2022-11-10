@@ -711,11 +711,6 @@ void RakPeer::Disconnect(unsigned int blockDuration, unsigned char orderingChann
 		recvEvent = INVALID_HANDLE_VALUE;
 	}	
 #endif
-
-  // Clear out the reliability layer list in case we want to reallocate it in a successive call to Init.
-  RemoteSystemStruct* temp = remoteSystemList;
-  remoteSystemList = 0;
-  delete [] temp;
 }
 
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
