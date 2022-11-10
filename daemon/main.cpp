@@ -67,8 +67,6 @@ void daemon() {
 }
 
 int main(int argc, char* argv[]) {
-  Sleep(5000);
-
   char temp[1024];
 
   GetModuleFileNameA(GetModuleHandleA(nullptr), temp, sizeof(temp));
