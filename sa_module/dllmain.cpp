@@ -258,6 +258,7 @@ void save_samp_state() {
   std::ranges::copy(rss->reliabilityLayer.waitingForSequencedPacketReadIndex,
                     std::begin(rak_state.waitingForSequencedPacketReadIndex));
 
+  samp_state.clear();
   auto store = [](auto version_tag) {
     samp_state.emplace("startup_args", get_startup_args(version_tag));
 
