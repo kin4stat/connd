@@ -50,6 +50,13 @@ public:
 
       const auto remote_player = player_info->m_pPlayer;
 
+      if (remote_player) {
+        this_state.color = remote_player->GetColorAsRGBA();
+        this_state.team = remote_player->m_nTeam;
+
+        this_state.show_nametags = remote_player->m_bDrawLabels;
+      }
+
       if (!remote_player ||
         !remote_player->m_pPed ||
         remote_player->m_nState == 0) {
@@ -57,7 +64,6 @@ public:
         goto SAVE_;
       }
 
-      this_state.show_nametags = remote_player->m_bDrawLabels;
       this_state.model = remote_player->m_pPed->GetModelIndex();
 
       if (remote_player->m_nState == sampapi::v037r3::CRemotePlayer::PLAYER_STATE_DRIVER ||
@@ -114,17 +120,13 @@ public:
 
       BitStream server_join{};
       server_join.Write<std::uint16_t>(this_state._this_id);
-      server_join.Write<std::uint32_t>(0);
+      server_join.Write<std::uint32_t>(this_state.color);
       server_join.Write<std::uint8_t>(this_state.is_npc);
       auto nick = utf2cp(this_state.nick);
       server_join.Write<std::uint8_t>(nick.size());
       server_join.Write(nick.c_str(), nick.size());
 
       samp_utils::impl_emul_rpc_bs(version, RPCEnumeration::RPC_ServerJoin, server_join);
-
-      if (const auto player = player_pool->GetPlayer(this_state._this_id)) {
-        player->SetColor(this_state.color);
-      }
 
       if (!this_state.spawned) continue;
 
@@ -139,6 +141,11 @@ public:
       stream_in.Write<float>(0);
       stream_in.Write<std::uint32_t>(this_state.color);
       stream_in.Write<std::uint8_t>(this_state.fightstyle);
+
+      if (const auto player = player_pool->GetPlayer(this_state._this_id)) {
+        player->m_bDrawLabels = this_state.show_nametags;
+        player->SetColor(this_state.color);
+      }
 
       samp_utils::impl_emul_rpc_bs(version, RPCEnumeration::RPC_WorldPlayerAdd, stream_in);
 
