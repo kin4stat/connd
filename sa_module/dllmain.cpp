@@ -693,6 +693,13 @@ struct connd {
         return true;
       }
 
+      if (current_state == EmulState::kCanEmulStaticData &&
+        packet_id == PacketEnumeration::ID_RPC &&
+        (rpc_id == RPCEnumeration::RPC_RequestClass ||
+        rpc_id == RPCEnumeration::RPC_Spawn)) {
+        return true;
+      }
+
       if (packet_id == ID_AUTH_KEY) {
         rak_state.server_pid = to;
       }

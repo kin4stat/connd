@@ -252,9 +252,10 @@ public:
 
     if (this_state.in_class_selection) {
       local_info->PrepareForClassSelection();
-      local_info->m_classSelection.m_bIsActive = true;
+      local_info->m_bIsActive = false;
       local_info->m_classSelection.m_nSelected = this_state.class_selection_number;
     }
+    local_info->m_bClearedToSpawn = true;
     local_info->m_classSelection.m_bEnableAfterDeath = this_state.goto_class_selection;
 
     if (this_state.shop_name.has_value()) {
