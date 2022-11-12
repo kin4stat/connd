@@ -99,6 +99,11 @@ public:
     }
 
     if (!this_state.lagcomp_mode) {
+      this_state.lagcomp_mode = 1;
+    }
+    else if (this_state.lagcomp_mode == 1) {
+      this_state.lagcomp_mode = 2;
+    } else if (this_state.lagcomp_mode == 2) {
       this_state.lagcomp_mode = 0;
     }
 
