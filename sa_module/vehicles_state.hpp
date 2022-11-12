@@ -78,6 +78,10 @@ public:
       this_state.lights_damage = samp_vehicle->GetLightsDamage();
       this_state.tires_damage = samp_vehicle->GetTires();
       this_state.lock_doors = samp_vehicle->m_bIsLocked;
+      this_state.engine_on = samp_vehicle->m_bEngineOn || game_vehicle->m_nVehicleFlags.bEngineOn;
+      this_state.lights_on = samp_vehicle->m_bIsLightsOn || game_vehicle->m_nVehicleFlags.bLightsOn;
+      this_state.turn_speed = game_vehicle->m_vecTurnSpeed;
+      this_state.move_speed = game_vehicle->m_vecMoveSpeed;
 
       if (game_vehicle->m_pDriver == local_ped) {
         this_state.driver = local_pid;
@@ -211,8 +215,16 @@ public:
         }
       }
 
-      samp_pool->m_pGameObject[this_state._this_id]->GetMatrix()->SetRotate(this_state.rotation);
+      auto game_vehicle = samp_pool->m_pGameObject[this_state._this_id];
+      auto samp_vehicle = samp_pool->m_pObject[this_state._this_id];
 
+      game_vehicle->GetMatrix()->SetRotate(this_state.rotation);
+      samp_vehicle->m_bEngineOn = this_state.engine_on;
+      samp_vehicle->m_bIsLightsOn = this_state.lights_on;
+      game_vehicle->m_nVehicleFlags.bEngineOn = this_state.engine_on;
+      game_vehicle->m_nVehicleFlags.bLightsOn = this_state.lights_on;
+      game_vehicle->m_vecTurnSpeed = this_state.turn_speed;
+      game_vehicle->m_vecMoveSpeed = this_state.move_speed;
     }
   }
 

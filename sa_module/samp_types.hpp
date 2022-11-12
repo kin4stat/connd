@@ -77,6 +77,8 @@ struct Vehicle {
   std::uint32_t model_id;
   Vector spawn_pos;
   Vector pos;
+  Vector move_speed;
+  Vector turn_speed;
   Quaternion rotation;
   std::uint8_t int_color1;
   std::uint8_t int_color2;
@@ -91,6 +93,9 @@ struct Vehicle {
   std::int32_t panel_damage;
   std::int8_t lights_damage;
   std::int8_t tires_damage;
+
+  bool engine_on;
+  bool lights_on;
 
   std::uint8_t lock_doors;
 
@@ -827,7 +832,11 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Vehicle,
                                    trailer_id,
                                    number_plate,
                                    driver,
-                                   passengers
+                                   passengers,
+                                   engine_on,
+                                   lights_on,
+                                   move_speed,
+                                   turn_speed
 )
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Textdraw,
