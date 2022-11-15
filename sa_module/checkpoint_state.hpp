@@ -50,6 +50,7 @@ public:
       sampapi::CVector pos = this_state.checkpoint->position;
       sampapi::CVector size = this_state.checkpoint->size;
       game->SetCheckpoint(&pos, &size);
+      game->m_checkpoint.m_bEnabled = true;
     }
     if (this_state.race_checkpoint.has_value()) {
       sampapi::CVector next_position = this_state.race_checkpoint->next_position;
@@ -58,6 +59,8 @@ public:
                                 &next_position,
                                 &current_position,
                                 this_state.race_checkpoint->size);
+
+      game->m_racingCheckpoint.m_bEnabled = true;
     }
   }
 
