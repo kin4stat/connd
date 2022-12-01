@@ -240,7 +240,7 @@ UTILS_BEGIN_FUNCTION(safe_disconnect, void)
   LOG_INFO("RakNet disconnected");
 UTILS_END_FUNCTION(safe_disconnect, void)
 
-void save_samp_state() {
+void save_samp_state(bool disconnect = true) {
   if (std::filesystem::exists(R"(.\connd\connd_samp_dump.json)")) {
     std::ifstream input{R"(.\connd\connd_samp_dump.json)"};
 
@@ -254,7 +254,8 @@ void save_samp_state() {
     }
   }
 
-  safe_disconnect();
+  if (disconnect)
+    safe_disconnect();
 
   auto rakpeer = samp_utils::get_rakpeer();
   auto rss = rakpeer->remote_system_list;
@@ -889,17 +890,17 @@ struct connd {
         rak_state.timeout = g_settings.quit_timeout * 60;
       }
 
-      safe_disconnect();
+      if (rak_state.timeout) {
+        LOG_INFO("Quiting from /q; daemon timeout: {}", rak_state.timeout);
+
+        save_samp_state();
+      }
 
       return hook.get_trampoline()(p);
     });
 
     netgame_dctor_hook.set_cb([](const auto& hook, void* netgame) {
-      if (g_settings.quit_timeout) {
-        LOG_INFO("Quiting from /q; daemon timeout: {}", rak_state.timeout);
-
-        save_samp_state();
-      }
+      
       return hook.get_trampoline()(netgame);
     });
 
